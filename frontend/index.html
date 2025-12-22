@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NingGuru Drive Pro</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    
+    <style>
+        /* --- 全局样式变量 --- */
+        :root {
+            --app-bg-url: none;
+            --app-bg-fallback: #f0f0f0;
+            
+            /* 【改动1】遮罩透明度改为 0.1 (10%)，极度通透 */
+            --app-content-overlay: rgba(0, 0, 0, 0.1); 
+            
+            --app-text: #fff; 
+            /* 【改动2】通用文字阴影，保证在任何背景上都清晰可见 */
+            --app-text-shadow: 0 1px 3px rgba(0,0,0,0.9); 
+            
+            --app-accent: #409eff;
+            --app-header-border: rgba(255,255,255,0.1);
+            --app-logo-gradient: #fff;
+            --el-color-primary: var(--app-accent);
+        }
+
+        * { touch-action: manipulation; box-sizing: border-box; }
+        
+        body { 
+            margin: 0; height: 100%; 
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; 
+            background-color: #333;
+            background-image: var(--app-bg-url), var(--app-bg-fallback);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            color: var(--app-text); 
+            transition: background 0.5s ease;
+        }
+
+        #app { height: 100vh; display: flex; flex-direction: column; }
+
+        /* 顶部导航 - 去掉模糊，几乎全透明 */
+        .el-header { 
+            background: rgba(0, 0, 0, 0.2); /* 仅加一点点黑底 */
+            border-bottom: 1px solid var(--app-header-border); 
+            display: flex; align-items: center; justify-content: space-between; 
+            padding: 0 20px; 
+            z-index: 100;
+        }
+        
+        .logo { 
+            font-size: 24px; font-weight: 900; 
+            color: #fff; 
+            letter-spacing: 1px; white-space: nowrap; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* 内容卡片 - 彻底透明，去掉模糊 */
+        .el-main { 
+            background: var(--app-content-overlay);
+            /* 【改动3】删掉了 backdrop-filter: blur(...)，实现高清透亮 */
+            margin: 20px; 
+            border-radius: 16px; 
+            border: 1px solid rgba(255, 255, 255, 0.15); /* 淡淡的白边框 */
+            padding: 20px; 
+            overflow-x: hidden; 
+            flex: 1; 
+        }
+
+        /* 表格样式 - 纯文字加强对比 */
+        .el-table, .el-table__expanded-cell { background-color: transparent !important; }
+        .el-table tr { background-color: transparent !important; }
+        .el-table th, .el-table td { 
+            background-color: transparent !important; 
+            border-bottom-color: rgba(255,255,255,0.1) !important; 
+            color: var(--app-text) !important; 
+            text-shadow: var(--app-text-shadow); 
+            font-weight: 600;
+        }
+        /* 鼠标悬停时给一点点白色高亮 */
+        .el-table--enable-row-hover .el-table__body tr:hover > td { 
+            background-color: rgba(255,255,255,0.15) !important; 
+            border-radius: 8px;
+        }
+        
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .el-header { padding: 10px 15px; height: auto !important; flex-wrap: wrap; gap: 10px; }
+            .logo { font-size: 20px; }
+            .logo span { display: none; }
+            .el-main { margin: 10px; padding: 10px; border-radius: 12px; }
+            .header-right { width: 100%; justify-content: flex-end; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <el-header height="70px">
+            <div class="logo">NINGGURU <span style="font-size: 14px; opacity: 0.9; color: #fff; vertical-align: middle; font-weight: normal; text-shadow: none;">Gift Edition</span></div>
+            
+            <div class="header-right" style="display: flex; gap: 10px; align-items: center;">
+                <el-dropdown @command="handleThemeChange" trigger="click">
+                    <el-button circle size="large" :color="currentThemeColor" style="color: white; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 2px 5px rgba(0,0,0,0.5);">
+                        <el-icon size="20"><Magic-Stick /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                        <el-dropdown-menu>
+                            <el-dropdown-item command="doraemon">🔵 哆啦A梦</el-dropdown-item>
+                            <el-dropdown-item command="pink">🌸 佳佳的粉色</el-dropdown-item>
+                            <el-dropdown-item command="spongebob">🟡 海绵宝宝</el-dropdown-item>
+                            <el-dropdown-item command="zootopia">🦊 疯狂动物城</el-dropdown-item>
+                            <el-dropdown-item command="shinchan">🖍️ 蜡笔小新</el-dropdown-item>
+                            <el-dropdown-item command="dark" divided>⚫ 极客黑</el-dropdown-item>
+                        </el-dropdown-menu>
+                    </template>
+                </el-dropdown>
+
+                <div style="display: flex; gap: 8px;">
+                    <el-button type="primary" :icon="Upload" @click="triggerUpload" round :size="isMobile ? 'default' : 'large'">
+                        <span v-if="!isMobile">上传</span>
+                    </el-button>
+                    <el-button type="success" plain @click="createFolderDialog = true" :icon="FolderAdd" round :size="isMobile ? 'default' : 'large'">
+                        <span v-if="!isMobile">新建</span>
+                    </el-button>
+                     <el-button type="danger" plain v-if="selection.length > 0" @click="batchDelete" :icon="Delete" round :size="isMobile ? 'default' : 'large'">
+                        <span v-if="!isMobile">删除</span>
+                     </el-button>
+                    <input type="file" ref="fileInput" style="display: none" @change="handleUpload">
+                </div>
+            </div>
+        </el-header>
+
+        <el-main>
+            <el-breadcrumb separator=">" style="margin-bottom: 20px; font-size: 16px; white-space: nowrap; overflow-x: auto; padding-bottom: 5px;">
+                <el-breadcrumb-item><a @click="navigate('')" style="cursor: pointer; font-weight: 900; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.9);">🏠 首页</a></el-breadcrumb-item>
+                <el-breadcrumb-item v-for="(crumb, index) in breadcrumbs" :key="index">
+                    <a @click="navigate(crumb.path)" style="cursor: pointer; font-weight: bold; color: rgba(255,255,255,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.9);">{{ crumb.name }}</a>
+                </el-breadcrumb-item>
+            </el-breadcrumb>
+
+            <el-table :data="tableData" style="width: 100%" @selection-change="handleSelectionChange" v-loading="loading" :size="isMobile ? 'default' : 'large'">
+                <el-table-column type="selection" width="40"></el-table-column>
+                
+                <el-table-column label="名称" min-width="200">
+                    <template #default="scope">
+                        <div style="display: flex; align-items: center; cursor: pointer;" @click="handleRowClick(scope.row)">
+                            <el-icon v-if="scope.row.isDir" size="24" color="#ffca28" style="margin-right: 10px; flex-shrink: 0; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));"><Folder /></el-icon>
+                            <el-icon v-else-if="scope.row.type === 'image'" size="24" color="#409eff" style="margin-right: 10px; flex-shrink: 0; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));"><Picture /></el-icon>
+                            <el-icon v-else-if="scope.row.type === 'video'" size="24" color="#f56c6c" style="margin-right: 10px; flex-shrink: 0; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));"><Video-Play /></el-icon>
+                            <el-icon v-else size="24" color="#ddd" style="margin-right: 10px; flex-shrink: 0;"><Document /></el-icon>
+                            <span style="font-weight: 600;">{{ scope.row.name }}</span>
+                        </div>
+                    </template>
+                </el-table-column>
+                
+                <el-table-column v-if="!isMobile" prop="size" label="大小" width="100"></el-table-column>
+                <el-table-column v-if="!isMobile" prop="last_modified" label="时间" width="180"></el-table-column>
+                
+                <el-table-column label="操作" :width="isMobile ? 60 : 100" align="center" fixed="right">
+                    <template #default="scope">
+                        <el-button v-if="!scope.row.isDir" link type="primary" :icon="Download" @click.stop="window.open(scope.row.url)" style="color: #fff; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.8);">
+                            <span v-if="!isMobile">下载</span>
+                        </el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+        </el-main>
+
+        <el-dialog v-model="videoDialog" title="预览" :width="isMobile ? '95%' : '70%'" destroy-on-close center>
+            <div style="background:#000; display:flex; justify-content:center;">
+                <video :src="currentVideoUrl" controls autoplay style="max-width:100%; max-height:70vh;"></video>
+            </div>
+        </el-dialog>
+        <el-dialog v-model="createFolderDialog" title="新建文件夹" :width="isMobile ? '80%' : '30%'">
+            <el-input v-model="newFolderName" placeholder="文件夹名"></el-input>
+            <template #footer>
+                <el-button @click="createFolderDialog = false">取消</el-button>
+                <el-button type="primary" @click="doCreateFolder">确定</el-button>
+            </template>
+        </el-dialog>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+        const { ElMessage, ElMessageBox } = ElementPlus;
+        const { Folder, Document, Picture, VideoPlay, Upload, Download, FolderAdd, Delete, MagicStick } = ElementPlusIconsVue;
+
+        // 主题配置
+        const themeConfig = {
+            doraemon: {
+                color: '#0096fa', 
+                img: 'bg/doraemon.jpg',
+                gradient: 'linear-gradient(135deg, #0096fa 0%, #ffffff 100%)',
+                text: '#fff', 
+                shadow: '0 2px 4px rgba(0,0,0,0.9)',
+                overlay: 'rgba(0, 0, 0, 0.1)' // 几乎完全透明
+            },
+            pink: {
+                color: '#ff69b4',
+                img: 'bg/pink.jpg',
+                gradient: 'linear-gradient(45deg, #ff9a9e 0%, #fad0c4 100%)',
+                text: '#fff', 
+                shadow: '0 2px 4px rgba(0,0,0,0.8)',
+                overlay: 'rgba(0, 0, 0, 0.1)'
+            },
+            spongebob: {
+                color: '#ffb03b',
+                img: 'bg/spongebob.jpg',
+                gradient: 'linear-gradient(180deg, #00a8ff 0%, #fffbe0 30%)',
+                text: '#fff',
+                shadow: '0 2px 4px rgba(0,0,0,0.9)', 
+                overlay: 'rgba(0, 0, 0, 0.1)'
+            },
+            zootopia: {
+                color: '#2e7d32',
+                img: 'bg/zootopia.jpg',
+                gradient: 'linear-gradient(to right, #43e97b 0%, #38f9d7 100%)',
+                text: '#fff', 
+                shadow: '0 2px 4px rgba(0,0,0,0.9)', 
+                overlay: 'rgba(0, 0, 0, 0.2)'
+            },
+            shinchan: {
+                color: '#ff5722',
+                img: 'bg/shinchan.jpg',
+                gradient: 'repeating-linear-gradient(45deg, #ff5722, #ff5722 10px, #ffeb3b 10px, #ffeb3b 20px)',
+                text: '#fff', 
+                shadow: '0 2px 4px rgba(0,0,0,1)', 
+                overlay: 'rgba(0, 0, 0, 0.2)'
+            },
+            dark: {
+                color: '#00ff41',
+                img: 'bg/dark.jpg',
+                gradient: 'linear-gradient(to bottom, #111, #222)',
+                text: '#eee', 
+                shadow: '0 1px 2px rgba(0,0,0,1)', 
+                overlay: 'rgba(0, 0, 0, 0.7)'
+            }
+        };
+
+        const app = createApp({
+            setup() {
+                const apiBase = 'http://' + window.location.hostname + ':8000';
+                const isMobile = ref(false);
+                const currentThemeColor = ref('#0096fa'); 
+                
+                const currentPath = ref(""); 
+                const tableData = ref([]);
+                const loading = ref(false);
+                const selection = ref([]);
+                const videoDialog = ref(false);
+                const currentVideoUrl = ref("");
+                const createFolderDialog = ref(false);
+                const newFolderName = ref("");
+
+                const handleThemeChange = (themeName) => {
+                    const theme = themeConfig[themeName];
+                    const root = document.documentElement;
+                    root.style.setProperty('--app-bg-url', `url('${theme.img}')`);
+                    root.style.setProperty('--app-bg-fallback', theme.gradient);
+                    root.style.setProperty('--app-content-overlay', theme.overlay);
+                    root.style.setProperty('--app-text', theme.text);
+                    root.style.setProperty('--app-text-shadow', theme.shadow);
+                    root.style.setProperty('--app-accent', theme.color);
+                    root.style.setProperty('--el-color-primary', theme.color);
+                    currentThemeColor.value = theme.color;
+                    localStorage.setItem('ningguru-theme-v3', themeName);
+                    ElMessage.success(`主题已切换`);
+                };
+
+                onMounted(() => {
+                    isMobile.value = window.innerWidth <= 768;
+                    window.addEventListener('resize', () => isMobile.value = window.innerWidth <= 768);
+                    const savedTheme = localStorage.getItem('ningguru-theme-v3') || 'doraemon';
+                    handleThemeChange(savedTheme);
+                    loadFiles();
+                });
+
+                const breadcrumbs = computed(() => { if (!currentPath.value) return []; const parts = currentPath.value.split('/').filter(p => p); let acc = ""; return parts.map(p => { acc += p + "/"; return { name: p, path: acc }; }); });
+                const loadFiles = async () => { loading.value = true; try { const res = await fetch(apiBase + '/list', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ path: currentPath.value }) }); const data = await res.json(); tableData.value = [...data.folders.map(f=>({...f,isDir:true})), ...data.files.map(f=>({...f,isDir:false}))]; } catch (e) {} finally { loading.value = false; } };
+                const navigate = (path) => { currentPath.value = path; loadFiles(); };
+                const handleRowClick = (row) => row.isDir ? navigate(row.path) : (row.type==='video' ? (currentVideoUrl.value=row.url,videoDialog.value=true) : window.open(row.url));
+                const triggerUpload = () => document.querySelector('input[type=file]').click();
+                const handleUpload = async (e) => { const file = e.target.files[0]; if(!file) return; try { const { url } = await (await fetch(apiBase + '/get_upload_url', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ filename: file.name, prefix: currentPath.value }) })).json(); await fetch(url, { method: 'PUT', body: file }); ElMessage.success("上传成功"); setTimeout(loadFiles, 1000); } catch(err) { ElMessage.error("失败"); } finally { e.target.value=''; } };
+                const doCreateFolder = async () => { if(!newFolderName.value) return; await fetch(apiBase + '/create_folder', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ path: currentPath.value + newFolderName.value }) }); createFolderDialog.value=false; newFolderName.value=""; setTimeout(loadFiles,500); };
+                const batchDelete = async () => { await ElMessageBox.confirm('确定删除?','提示'); await fetch(apiBase + '/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ paths: selection.value.map(i=>i.isDir?i.path:i.full_path) }) }); setTimeout(loadFiles,500); };
+
+                return { isMobile, currentThemeColor, handleThemeChange, tableData, loading, breadcrumbs, navigate, handleRowClick, videoDialog, currentVideoUrl, createFolderDialog, newFolderName, triggerUpload, handleUpload, doCreateFolder, batchDelete, selection, handleSelectionChange: (val)=>selection.value=val, Folder, Document, Picture, VideoPlay, Upload, Download, FolderAdd, Delete, MagicStick };
+            }
+        });
+        
+        for(const [k,v] of Object.entries(ElementPlusIconsVue)) app.component(k,v);
+        app.use(ElementPlus);
+        app.mount('#app');
+    </script>
+</body>
+</html>

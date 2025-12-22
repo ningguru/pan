@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  minio:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/minio/minio:latest
+    container_name: ningguru-storage
+    command: server /data1 /data2 --console-address ":9001" --address ":9000"
+    volumes:
+      - /data:/data1
+      - /data2:/data2
+    environment:
+      MINIO_ROOT_USER: ningguru
+      MINIO_ROOT_PASSWORD: "12345678"
+      MINIO_SERVER_URL: http://pan.ningguru.cc.cd:9000
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: always
+
+  backend:
+    build: ./backend
+    container_name: ningguru-api
+    environment:
+      MINIO_ENDPOINT: minio:9000
+      EXTERNAL_ENDPOINT: "pan.ningguru.cc.cd:9000"
+      MINIO_ACCESS_KEY: ningguru
+      MINIO_SECRET_KEY: "12345678"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - minio
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: ningguru-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: always
