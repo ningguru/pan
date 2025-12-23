@@ -1,26 +1,30 @@
 # NingGuru Cloud (Gift Edition) ☁️
 
 > 专为个人和团队打造的高性能私有云盘系统。
-> 基于 Docker + MinIO 深度定制，支持多主题切换、S3 协议直传与弹性扩容。
+> 基于 Docker + MinIO + FastAPI 深度定制，支持多主题切换、S3 协议直传、持久化免登录与弹性扩容。
 
 ## 📖 目录
 
-- [核心特性](#-核心特性)
-- [快速部署](#-快速部署)
-- [架构与配置](#-架构与配置)
+- [✨ 核心特性](#-核心特性)
+- [🚀 快速部署](#-快速部署)
+- [🏗️ 架构与配置](#-架构与配置)
     - [服务端口](#服务端口)
-    - [Nginx 反向代理 (生产环境配置)](#nginx-反向代理-生产环境配置)
-- [使用指南](#-使用指南)
-    - [Web 端访问](#web-端访问)
+    - [Nginx 反向代理 (核心配置)](#nginx-反向代理-核心配置)
+- [🖥️ 使用指南](#-使用指南)
+    - [Web 端功能](#web-端功能)
     - [MinIO 控制台](#minio-控制台)
-- [高级玩法：搭建私有图床](#-高级玩法搭建私有图床)
-- [运维指南：存储横向扩容](#-运维指南存储横向扩容)
+- [📸 高级玩法：搭建私有图床](#-高级玩法搭建私有图床)
+- [⚙️ 运维指南](#-运维指南)
 
 ---
 
 ## ✨ 核心特性
 
 - **🚀 极速传输**：前端直连 MinIO 存储，大文件上传跑满带宽，无中间层损耗。
+- **🔐 双重鉴权**：严格区分 **公开空间** 与 **隐私空间**。
+    - **公开密码**：仅可访问公共文件，无法进入隐私区域。
+    - **隐私密码**：解锁隐秘文件，享受完全权限。
+- **💾 持久化免登录**：内置轻量级 SQLite 数据库，Token 有效期 30 天，刷新页面不掉线，重启服务不丢失登录状态。
 - **🎨 魔法主题**：内置哆啦A梦、海绵宝宝、疯狂动物城等 6 套精美 UI，支持一键热切换。
 - **📱 全端适配**：响应式设计，完美适配 PC、平板与手机端。
 - **💾 弹性存储**：支持多硬盘挂载，自动识别系统数据盘进行容量聚合。
@@ -37,141 +41,138 @@
    ```bash
    chmod +x deploy.sh
    ./deploy.sh
-   ```
-   
-   *脚本会自动扫描 `/data\*` 目录下的磁盘，并生成 `docker-compose.yaml`。*
 
-   2.**更新静态资源 (可选)**
+*脚本会自动扫描 `/data\*` 目录下的磁盘，并生成 `docker-compose.yaml`。*
 
-如果你修改了前端代码或增加了背景图，需执行以下命令同步到运行中的容器：
+   2.**初始化配置**
 
-```
-docker cp frontend/index.html ningguru-web:/usr/share/nginx/html/index.html
-# 同步背景图
-docker cp frontend/bg ningguru-web:/usr/share/nginx/html/
-```
+首次运行时，脚本会要求你设置：
 
-------
+- **全站访问密码**：用于公开访问。
+- **隐私空间密码**：用于解锁隐藏内容。
 
-## 🛠 架构与配置
+### 🏗️ 架构与配置
 
-### 服务端口
+| **服务名称**      | **容器端口** | **宿主机端口 (默认)** | **说明**               |
+| ----------------- | ------------ | --------------------- | ---------------------- |
+| **Frontend**      | 80           | `8080`                | Vue3 前端界面          |
+| **Backend**       | 8000         | `8000`                | FastAPI 后端 + SQLite  |
+| **MinIO API**     | 9000         | `9000`                | S3 数据接口 (核心存储) |
+| **MinIO Console** | 9001         | `9001`                | 存储管理后台           |
 
-| **服务名称**      | **容器端口** | **宿主机端口 (默认)** | **说明**                      |
-| ----------------- | ------------ | --------------------- | ----------------------------- |
-| **Frontend**      | 80           | `8080`                | 网盘 Web 界面 (用户访问)      |
-| **Backend**       | 8000         | `8000`                | 业务逻辑 API                  |
-| **MinIO API**     | 9000         | `9000`                | S3 数据读写接口 (图床/上传用) |
-| **MinIO Console** | 9001         | `9001`                | 存储管理后台                  |
+### Nginx 反向代理 (核心配置)
 
-### Nginx 反向代理 (生产环境配置)
-
-为了使用域名 `pan.ningguru.cc.cd` 访问，并去除端口号，需要在宿主机配置 Nginx。
+为了解决**浏览器跨域(CORS)** 和 **S3 签名主机名不匹配** 的问题，生产环境必须使用 Nginx 进行反代。
 
 **配置文件路径**: `/etc/nginx/conf.d/ningguru.conf`
 
-Nginx
-
-```
+```nginx
 server {
     listen 80;
     server_name pan.ningguru.cc.cd;
 
-    # 解除上传大小限制 (非常重要，否则无法上传大文件)
+    # 允许大文件上传 (全局生效)
     client_max_body_size 0;
 
-    # --- 网盘 Web 界面转发 ---
-    location / {
-        proxy_pass [http://127.0.0.1:8080](http://127.0.0.1:8080); # 转发到 Docker 映射的 8080 端口
+    # --- 1. 后端 API 转发 ---
+    # 将登录、列表、鉴权等请求转发给 FastAPI 后端
+    location ~ ^/(login|list|get_upload_url|auth|api|create_folder|delete) {
+        proxy_pass [http://127.0.0.1:8000](http://127.0.0.1:8000);
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # --- MinIO API 转发 (可选，用于外部工具连接) ---
-    # 建议直接开放 9000 端口，或者配置 distinct location
+    # --- 2. MinIO 上传转发 (关键修复) ---
+    # 解决 "SignatureDoesNotMatch" 问题的核心配置
+    location /drive/ {
+        proxy_pass [http://127.0.0.1:9000](http://127.0.0.1:9000);
+        
+        # 【核心】强制修改 Host 为 minio:9000
+        # 欺骗 MinIO，让它认为请求来自内网，从而通过签名校验
+        proxy_set_header Host minio:9000;
+        
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    # --- 3. 前端页面转发 ---
+    location / {
+        proxy_pass [http://127.0.0.1:8080](http://127.0.0.1:8080);
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
 }
 ```
+配置完成后，执行 `nginx -s reload` 生效。
 
-*配置完成后，执行 `nginx -s reload` 生效。*
+### 🖥️ 使用指南
 
-------
-
-## 🖥 使用指南
-
-### Web 端访问
+### Web 端功能
 
 - **地址**: `http://pan.ningguru.cc.cd`
-- **功能**: 文件上传、下载、新建文件夹、批量删除、视频在线预览。
+- **登录逻辑**:
+  - 输入 **公开密码** -> 进入公共文件区 (无法操作隐私文件)。
+  - 点击右上角 "隐私空间" -> 输入 **隐私密码** -> 解锁全部权限。
+- **文件操作**: 支持拖拽上传、新建文件夹、批量删除、MP4 视频在线播放。
 - **主题切换**: 点击右上角“魔法棒”图标即可切换背景风格。
 
 ### MinIO 控制台
 
 - **地址**: `http://pan.ningguru.cc.cd:9001`
-- **默认账号**: `ningguru` (或你在部署时设置的账号)
+- **默认账号**: `ningguru` (或部署时设置的账号)
 - **默认密码**: `12345678`
-- **功能**: 管理存储桶 (Buckets)、查看底层文件、创建访问密钥 (Access Keys)。
+- **功能**: 底层文件管理、Bucket 策略配置、生命周期管理。
 
-------
-
-## 📸 高级玩法：搭建私有图床
+### 📸 高级玩法：搭建私有图床
 
 利用 MinIO 的 S3 兼容性，你可以将其作为 Typora + PicGo 的图床，实现“截图即上传”。
 
-1. **创建存储桶:**
-
-   登录 MinIO 控制台 -> Buckets -> Create Bucket (例如命名为 images)。
-
-2. **设置公开访问权限:**
-
-   点击刚创建的 Bucket -> Access Policy -> Set directly to Public (这样外部才能看到图片)。
-
-3. **获取密钥:**
-
-   点击左侧菜单 Identity -> Users (或 Access Keys) -> Create Access Key。
-
-   - 记下 `Access Key` 和 `Secret Key`。
-
+1. **创建存储桶:** 登录 MinIO 控制台 -> Buckets -> Create Bucket (例如 `images`)。
+2. **设置公开权限:** 点击 Bucket -> Access Policy -> Set strictly to **Public**。
+3. **获取密钥:** 点击 Identity -> Users -> Create Access Key。
 4. **配置 PicGo (S3 插件)**:
-
    - **应用密钥ID**: (填入 Access Key)
    - **应用密钥**: (填入 Secret Key)
    - **桶名**: `images`
    - **文件路径**: `{year}/{month}/{filename}`
-   - **地区**: `us-east-1` (默认)
-   - **自定义节点 (Endpoint)**: `http://pan.ningguru.cc.cd:9000` (**注意是 9000端口**)
+   - **自定义节点**: `http://pan.ningguru.cc.cd:9000` (**注意是 9000 端口**)
 
-------
+## ⚙️ 运维指南
 
-## ⚙️ 运维指南：存储横向扩容
+### 1. 存储横向扩容
 
-本系统支持动态挂载多块硬盘，无需重新编译代码。
+服务器插了新硬盘 (如 `/data3`)？
 
-**场景**：服务器插了一块新硬盘，挂载到了 `/data3` 目录。
+1. 确保新硬盘已挂载。
+2. 重新运行 `./deploy.sh`。
+3. 脚本会自动发现新盘，选择 `all` 即可将新盘加入集群，容量自动叠加。
 
-**操作步骤**：
+### 2. 数据库备份
 
-1. 确保新硬盘已挂载：
+用户的登录 Token 和密码配置存储在 SQLite 数据库中。 建议定期备份：
 
-   Bash
+```shell
+docker cp ningguru-api:/app/ningguru.db ./backup_ningguru.db
+```
 
-   ```
-   df -h | grep data3
-   ```
+### 3. 查看实时日志
 
-2. 重新运行部署脚本：
+排查登录或上传问题：
 
-   Bash
+```bash
+docker logs -f --tail 100 ningguru-api
+```
 
-   ```
-   ./deploy.sh
-   ```
-
-3. 在“存储资源池配置”步骤中，脚本会自动发现 `/data3`。
-
-4. 选择 `all` 或者手动输入包含新盘的序号。
-
-5. 确认重启。
-
-**原理**：MinIO 容器会自动将新挂载的 `/data3` 识别为新的 Drive，从而实现容量的线性叠加。

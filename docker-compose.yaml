@@ -26,6 +26,8 @@ services:
       EXTERNAL_ENDPOINT: "pan.ningguru.cc.cd:9000"
       MINIO_ACCESS_KEY: ningguru
       MINIO_SECRET_KEY: "12345678"
+      SITE_PASSWORD: "155696"
+      PRIVATE_PASSWORD: "1556966371"
     ports:
       - "8000:8000"
     depends_on:

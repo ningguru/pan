@@ -1,5 +1,6 @@
 fastapi
 uvicorn
-minio
 pydantic
+boto3
 python-multipart
+sqlalchemy
